@@ -1,0 +1,4 @@
+.DS_Store
+egs/exp/*
+**/__pycache__/
+src/__pycache__
