@@ -18,7 +18,7 @@ import matplotlib
 matplotlib.rcParams.update({'font.size': 26})
 
 
-DATASET_INPUT_PATH = "/home/eivor/data/MAVOS-DD"
+DATASET_INPUT_PATH = "/mnt/d/projects/datasets/MAVOS-DD"
 CHECKPOINT_PATH = "/home/eivor/biodeep/Detection/OpenAVFF/egs/exp/stage-3/models/best_optim_state.pth"
 CHECKPOINT_PATH = "/home/eivor/biodeep/Detection/OpenAVFF/egs/exp/stage-3/models/best_audio_model.pth"
 
@@ -85,7 +85,7 @@ def evaluate_model(dataset):
     return stats   
     
 if __name__ == "__main__":
-    with open("predictions_mavos.json") as input_json_file:
+    with open("predictions_custom.json") as input_json_file:
         preds_json = json.load(input_json_file)
         
     mavos_dd = datasets.Dataset.load_from_disk(DATASET_INPUT_PATH)
@@ -96,42 +96,42 @@ if __name__ == "__main__":
     split_to_evaluate = "open-model"
     split_to_evaluate = "open-language"
     split_to_evaluate = "open-set"
+    for split_to_evaluate in ["closed-set", "open-model", "open-language",  "open-set"]:
+        if split_to_evaluate == "closed-set":
+            # Test closed-set
+            curr_split = split_closed_set
+        elif split_to_evaluate == "open-model":
+            # Open model
+            curr_split = datasets.concatenate_datasets([
+                split_closed_set,
+                mavos_dd.filter(lambda sample: sample['split']=="test" and sample['open_set_model']==True and sample["open_set_language"]==False)
+            ])
+        elif split_to_evaluate == "open-language":
+            # Open language
+            curr_split = datasets.concatenate_datasets([
+                split_closed_set,
+                mavos_dd.filter(lambda sample: sample['split']=="test" and sample['open_set_model']==False and sample["open_set_language"]==True)
+            ])
+        elif split_to_evaluate == "open-set":
+            # Open set
+            curr_split = mavos_dd.filter(lambda sample: sample['split']=="test")
 
-    if split_to_evaluate == "closed-set":
-        # Test closed-set
-        curr_split = split_closed_set
-    elif split_to_evaluate == "open-model":
-        # Open model
-        curr_split = datasets.concatenate_datasets([
-            split_closed_set,
-            mavos_dd.filter(lambda sample: sample['split']=="test" and sample['open_set_model']==True and sample["open_set_language"]==False)
-        ])
-    elif split_to_evaluate == "open-language":
-        # Open language
-        curr_split = datasets.concatenate_datasets([
-            split_closed_set,
-            mavos_dd.filter(lambda sample: sample['split']=="test" and sample['open_set_model']==False and sample["open_set_language"]==True)
-        ])
-    elif split_to_evaluate == "open-set":
-        # Open set
-        curr_split = mavos_dd.filter(lambda sample: sample['split']=="test")
-
-    y_pred = []
-    y_true = []
-    for sample in curr_split:
-        entry = preds_json[sample["video_path"]]
-        y_pred.append(entry["pred"])
-        y_true.append(entry["true"])
+        y_pred = []
+        y_true = []
+        for sample in curr_split:
+            entry = preds_json[sample["video_path"]]
+            y_pred.append(entry["pred"])
+            y_true.append(entry["true"])
+            
+        stats = calculate_stats(torch.tensor(y_pred), torch.tensor(y_true))
         
-    stats = calculate_stats(torch.tensor(y_pred), torch.tensor(y_true))
+        mAP = np.mean([stat['AP'] for stat in stats])
+        mAUC = np.mean([stat['auc'] for stat in stats])
+        acc = stats[0]['acc'] # this is just a trick, acc of each class entry is the same, which is the accuracy of all classes, not class-wise accuracy
+        
+        print(f"{split_to_evaluate}: {mAP=}, {mAUC=}, {acc=}\n")
     
-    mAP = np.mean([stat['AP'] for stat in stats])
-    mAUC = np.mean([stat['auc'] for stat in stats])
-    acc = stats[0]['acc'] # this is just a trick, acc of each class entry is the same, which is the accuracy of all classes, not class-wise accuracy
-    
-    print(f"{split_to_evaluate}: {mAP=}, {mAUC=}, {acc=}\n")
-    
-    plot_confusion_matrix_percent(np.argmax(y_true, axis=1), np.argmax(y_pred, axis=1), name=split_to_evaluate)
+    # plot_confusion_matrix_percent(np.argmax(y_true, axis=1), np.argmax(y_pred, axis=1), name=split_to_evaluate)
 
 """
 Fine-tuned:

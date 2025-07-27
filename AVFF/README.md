@@ -85,4 +85,4 @@ Use `inference.py` and set the global variables to their correct values (i.e. ac
 
 ## Performance metrics
 
-To compute the performance metrics use the script `eval.py`.
+To compute the performance metrics use the `eval.py` script.
