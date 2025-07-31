@@ -200,8 +200,6 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
 
             # Iterate over the videos in the dataset
             for video_name, video_info in sub_dataset_info.items():
-                if video_name != "EzSdf3VK9qc_3_1--13208-LmGz2Hp34l0_11_1":
-                    continue
                 # Unique video name
                 unique_video_name = video_info['label'] + '_' + video_name
 
@@ -476,7 +474,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             A tuple containing the image tensor, the label tensor, the landmark tensor,
             and the mask tensor.
         """
-        print(f"Dataset length: {len(self)}]")
+        # print(f"Dataset length: {len(self)}]")
 
         # Get the image paths and label
         image_paths = self.data_dict['image'][index]
@@ -486,7 +484,6 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             name = self.data_dict['name'][index]
         if not isinstance(image_paths, list):
             image_paths = [image_paths]  # for the image-level IO, only one frame is used
-
         image_tensors = []
         landmark_tensors = []
         mask_tensors = []
@@ -579,7 +576,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             images, labels, landmarks, masks, names = zip(*batch)
         else:
             images, labels, landmarks, masks = zip(*batch)
-        
+        print(name_present)
         # Stack the image, label, landmark, and mask tensors
         # print(names)
         images = torch.stack(images, dim=0)

@@ -13,7 +13,8 @@ import csv
 import random
 import time
 from PIL import ImageEnhance
-
+from memory_profiler import profile
+import gc
 class RandomCropAndResize:
     def __init__(self, im_res):
         self.im_res = im_res
@@ -161,7 +162,7 @@ class MavosDD(Dataset):
         fbank = torch.nn.functional.interpolate(fbank.unsqueeze(0).transpose(1,2), size=(target_length,), mode='linear', align_corners=False).transpose(1,2).squeeze(0)
 
         return fbank
-
+    # @profile
     def _get_frames(self, video_name):
         try:
             vr = VideoReader(video_name)
@@ -169,35 +170,48 @@ class MavosDD(Dataset):
         
             # Calculate the indices to sample uniformly
             frame_indices = np.linspace(0, total_frames - 1, self.num_frames).astype(int)
-        
+            start_time =time.time()
             # Read the frames using the calculated indices
-            frames = [vr[i].asnumpy() for i in frame_indices]
+            frames = vr.get_batch(frame_indices).asnumpy()
+            frames = [self.preprocess(frame)  for frame in frames]
+            print(f"Reading time: {time.time()-start_time}, {len(vr)}")
         except:
-            frames = torch.zeros(self.num_frames, 3, 224, 224)
+            frames = [torch.zeros(3, 224, 224) for i in range(self.num_frames)]
             
         return frames
-    
+    # @profile
     def _concat_get_frames(self, video_name1, video_name2):
         try:
             vr1 = VideoReader(video_name1)
             vr2 = VideoReader(video_name2)
 
-            frames_1 = [vr1[i].asnumpy() for i in range(len(vr1))]
-            frames_2 = [vr2[i].asnumpy() for i in range(len(vr2))]
+            len1 = len(vr1)
+            len2 = len(vr2)
+            total_frames = len1 + len2
 
-            frames = frames_1 + frames_2
-
-            total_frames = len(vr1) + len(vr2)
-
+            # Compute indices to sample from the combined video
             frame_indices = np.linspace(0, total_frames - 1, self.num_frames).astype(int)
 
-            frames = [frames[i] for i in frame_indices]
+            frames = []
+
+            for idx in frame_indices:
+                if idx < len1:
+                    frame = vr1[idx].asnumpy()
+                else:
+                    frame = vr2[idx - len1].asnumpy()
+                frames.append(self.preprocess(frame))
+
+            # Optional: explicitly delete and collect memory
+            del vr1, vr2
+            gc.collect()
+
         
         except:
             frames = torch.zeros(self.num_frames, 3, 224, 224)
             
         return frames
     
+    # @profile
     def _augment_concat(self, index):
         sample = self.dataset[index]
         video_name = os.path.join(self.input_path,sample["video_path"])
@@ -240,7 +254,8 @@ class MavosDD(Dataset):
         frames = self._get_frames(video_name)
         fbank = self._wav2fbank(video_name_1)
         return fbank, frames, label
-
+    
+    # @profile
     def __getitem__(self, index):
         show_time = False
         
@@ -261,7 +276,7 @@ class MavosDD(Dataset):
                 print('there is an error in loading audio')
             
             frames = self._get_frames(video_name)
-            frames = [self.preprocess(frame) for frame in frames]
+            # frames = [self.preprocess(frame) for frame in frames]
             frames = torch.stack(frames)
         
         else:
@@ -294,7 +309,7 @@ class MavosDD(Dataset):
                 #     frames[i] = self.preprocess_aug(frame)
                 # else:
                 #     frames[i] = self.preprocess(frame)
-            frames = [self.preprocess(frame) for frame in frames]
+            # frames = [self.preprocess(frame) for frame in frames]
             frames = torch.stack(frames)
             
             if show_time: print(f"Step 4: ", time.time() - start_time)

@@ -58,7 +58,7 @@ import os
 import sys
 import time
 import cv2
-import dlib
+# import dlib
 import yaml
 import logging
 import datetime
@@ -403,7 +403,15 @@ def video_manipulate(
         logger.error(f"Error processing video {movie_path}: {e}")
 import einops
 from PIL import Image
+def count_files(directory, extension):
+    png_count = 0
+    npy_count = 0
 
+    for file in os.listdir(directory):
+        if file.endswith(extension):
+            png_count += 1
+
+    return png_count
 def preprocess(dataloader, face_detector=None):
     # Define paths to videos in dataset
     # movies_path_list = sorted([Path(p) for p in glob.glob(os.path.join(dataset_path, '**/*.mp4'), recursive=True)])
@@ -465,13 +473,17 @@ def preprocess(dataloader, face_detector=None):
                 boxes, probs, landmarks, video.squeeze(), method=face_detector.selection_method
             )
         # Extract faces
-        faces = face_detector.extract(video.squeeze(), boxes, None)
-        if faces is None:
-            continue
         output_dir_frames = os.path.join(path[0], "frames", video_name[0])
         output_dir_landmarks = os.path.join(path[0], "landmarks", video_name[0])
         os.makedirs(output_dir_frames, exist_ok=True)
         os.makedirs(output_dir_landmarks, exist_ok=True)
+        if count_files(output_dir_frames, ".png")>10 and  count_files(output_dir_landmarks, ".npy")>10:
+            print("skipped already extracted")
+            continue
+        faces = face_detector.extract(video.squeeze(), boxes, None)
+        if faces is None:
+            continue
+        
         for i, face in enumerate(faces):
             if face is None:
                 continue
@@ -568,7 +580,7 @@ if __name__ == '__main__':
     elif dataset_name == "MAVOS-DD":
         from datasets import load_from_disk
         dataset = load_from_disk(dataset_path)
-        filtered_dataset = dataset.filter(lambda sample: sample['split'] == 'validation')
+        filtered_dataset = dataset
         # sub_dataset_paths = {}
         # for sample in dataset_test_in_domain:
         #     key = f"{sample['language']}/{sample['generative_method']}"

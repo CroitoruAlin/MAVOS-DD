@@ -1,4 +1,4 @@
-from confusio_matrix import plot_confusion_matrix_percent
+
 import numpy as np
 from scipy import stats
 from sklearn import metrics
@@ -26,7 +26,7 @@ def calculate_stats(output, target, name):
     # Accuracy, only used for single-label classification such as esc-50, not for multiple label one such as AudioSet
     acc = metrics.accuracy_score(np.argmax(target, 1), np.argmax(output, 1))
     print(np.argmax(target, 1), np.argmax(output, 1))
-    plot_confusion_matrix_percent(np.argmax(target, 1), np.argmax(output, 1), name=name)
+    # plot_confusion_matrix_percent(np.argmax(target, 1), np.argmax(output, 1), name=name)
     # Class-wise statistics
     for k in range(classes_num):
 
@@ -86,10 +86,15 @@ def run_evaluation(metadata, dict_video_label_pred, text):
     # print(output.shape)
     target = np.array(target)
     output = np.array(output)
-    print(output.shape)
-    print(text, calculate_stats(output, target, text))
+    # print(output.shape)
+    stats = calculate_stats(output, target, text)
+    mAP = np.mean([stat['AP'] for stat in stats])
+    mAUC = np.mean([stat['auc'] for stat in stats])
+    acc = stats[0]['acc'] # this is just a trick, acc of each class entry is the same, which is the accuracy of all classes, not class-wise accuracy
+
+    print(f"{text}: {mAP=}, {mAUC=}, {acc=}")
 if __name__ =="__main__":
-    predictions = Dataset.load_from_disk("/home/elrond/projects/DeepfakeBench/predictions/finetuned/tall")
+    predictions = Dataset.load_from_disk("/mnt/d/projects/MAVOS-DD/DeepfakeBench/predictions/pretrained_new/tall_test")
     # for pred in predictions:
     #     print("TALL:", pred)
     #     break
@@ -102,7 +107,7 @@ if __name__ =="__main__":
     dict_video_label_pred={}
     print(predictions[0])
     for pred in predictions:
-        dict_video_label_pred[pred['video_name']] = {'label': pred['labels'], "prediction": pred['predictions']}#[1- pred['predictions'], pred['predictions']]}
+        dict_video_label_pred[pred['names']] = {'label': pred['label'], "prediction": pred['pred']}#[1- pred['predictions'], pred['predictions']]}
         # if dict_video_label_pred[pred['video_path']]['label'] ==0 and dict_video_label_pred[pred['video_path']]['label']!=dict_video_label_pred[pred['video_path']]['prediction']:
         #     print(pred['video_path'])
     print(metadata[0])

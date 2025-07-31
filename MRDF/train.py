@@ -49,8 +49,8 @@ parser = argparse.ArgumentParser(description="MRDF training")
 parser.add_argument("--dataset", type=str, default='fakeavceleb')
 parser.add_argument("--model_type", type=str, default='MRDF_CE')
 parser.add_argument("--data_root", type=str)
-parser.add_argument("--batch_size", type=int, default=2)
-parser.add_argument("--num_workers", type=int, default=7)
+parser.add_argument("--batch_size", type=int, default=4)
+parser.add_argument("--num_workers", type=int, default=16)
 parser.add_argument("--gpus", type=int, default=1)
 parser.add_argument("--precision", default=16)
 parser.add_argument("--num_train", type=int, default=None)
@@ -142,14 +142,15 @@ if __name__ == '__main__':
             precision = args.precision
 
         monitor = "val_loss_epoch"
-        early_stop_callback = EarlyStopping(monitor=monitor, min_delta=0.00, patience=args.patience, verbose=False, mode="max")
+        early_stop_callback = EarlyStopping(monitor=monitor, min_delta=0.00, patience=args.patience, verbose=False, mode="min")
 
         trainer = Trainer(log_every_n_steps=args.log_steps, precision=precision, min_epochs=args.min_epochs, max_epochs=args.max_epochs,
             callbacks=[
                 ModelCheckpoint(
-                    dirpath=f"{args.outputs}/ckpts/{args.model_type}", save_last=False,
+                    dirpath=f"{args.outputs}/ckpts/{args.model_type}", save_last=True,
                     filename=args.model_type + '_' + args.save_name_id + '_' + "{epoch}-{val_loss:.3f}",
-                    monitor=monitor, mode="min"
+                    save_top_k=-1,                  # Save all checkpoints (no limit)
+                    every_n_epochs=1                # Save every epoch
                 ),
                 LrLogger(),
                 EarlyStoppingLR(lr_threshold=1e-7),
@@ -166,7 +167,7 @@ if __name__ == '__main__':
         )
 
         # print(args.learning_rate, args.weight_decay, args.margin_audio, args.margin_visual, args.margin_contrast)
-        trainer.fit(model, dm, ckpt_path = "checkpoints/MRDF_Margin_train_2.ckpt")
+        trainer.fit(model, dm, ckpt_path = "/mnt/d/projects/MAVOS-DD/MRDF/checkpoints/MRDF_CE.ckpt")
 
         # test
         model.eval()

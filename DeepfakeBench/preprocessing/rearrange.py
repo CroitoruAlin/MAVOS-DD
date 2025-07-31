@@ -495,14 +495,15 @@ def generate_dataset_file(dataset_name, dataset_root_path, output_file_path, com
         dataset_path = os.path.join(dataset_root_path, dataset_name)
         dataset_dict[dataset_name] = {"real": {"train": {}, "test": {}, "val":{}},
                                       "fake": {"train": {}, "test": {}, "val": {}}}
-        dataset = load_from_disk("./datasets/MAVOS-DD")#.filter(lambda sample: sample['split'] == 'test')
+        dataset = load_from_disk("/mnt/d/projects/datasets/MAVOS-DD")#.filter(lambda sample: sample['split'] == 'test')
         for sample in tqdm(dataset):
             if sample['split'] =="validation":
                 split = "val"
             else:
                 split = sample['split']
-            video_name = sample['video_path'].split('/')[-1][:-4]
-            video_path = os.path.join(dataset_path, sample['language'], sample['generative_method'], "frames", video_name)
+            sample_path_components = sample['video_path'].split('/')
+            video_name = sample_path_components[-1][:-4]
+            video_path = os.path.join(dataset_path, sample_path_components[0],sample_path_components[1], "frames", video_name)
             if not os.path.exists(video_path) or len(os.listdir(video_path))==0:
                 continue
             # print(len(os.listdir(video_path)))

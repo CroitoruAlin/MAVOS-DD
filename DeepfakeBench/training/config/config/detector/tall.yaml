@@ -80,7 +80,7 @@ metric_scoring: auc   # metric for evaluation (auc, acc, eer, ap)
 cuda: true   # whether to use CUDA acceleration
 cudnn: true   # whether to use CuDNN for convolution operations
 
-dataset_json_folder: '/home/elrond/projects/DeepfakeBench/preprocessing/dataset_json_v6'
+dataset_json_folder: '/mnt/d/projects/MAVOS-DD/DeepfakeBench/preprocessing/dataset_json_v6'
 rgb_dir: 'datasets/rgb'
 label_dict:
   # DFD

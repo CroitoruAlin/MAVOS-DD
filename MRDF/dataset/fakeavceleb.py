@@ -321,12 +321,15 @@ class MAVOSSDataModule(LightningDataModule):
 
         train_metadata = self.metadata.filter(lambda sample: sample['split']=='train')#.select(range(4))
         test_metadata = self.metadata.filter(lambda sample: sample['split']=="test")#.select(range(10))
+        validation_metadata = self.metadata.filter(lambda sample: sample['split']=="validation")
 
         self.train_metadata = train_metadata
         self.test_metadata = test_metadata
+        self.validation_metadata = validation_metadata
 
         self.train_dataset = self.Dataset("train", self.root, metadata=self.train_metadata)
         self.test_dataset = self.Dataset("test", self.root, metadata=self.test_metadata)
+        self.validation_dataset = self.Dataset("validation", self.root, metadata=self.validation_metadata)
 
     def crop_to_max_size(self, wav, target_size, start=None):
         size = len(wav)
@@ -372,7 +375,7 @@ class MAVOSSDataModule(LightningDataModule):
 
         batch = {"id": torch.LongTensor([s["id"] for s in samples]),
                  "file": [s["file"] for s in samples],
-                 "audio": collated_audios,
+                 "audio": collated_audios,#torch.zeros(collated_audios.shape),
                  "video": collated_videos,
                  "padding_mask": padding_mask,
                  "label":  torch.LongTensor([s["label"] for s in samples]),
@@ -417,7 +420,7 @@ class MAVOSSDataModule(LightningDataModule):
     #                       worker_init_fn=seed_worker, generator=g)
     #
     def val_dataloader(self) -> EVAL_DATALOADERS:
-        return DataLoader(self.test_dataset, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers,
+        return DataLoader(self.validation_dataset, batch_size=self.batch_size, shuffle=False, num_workers=self.num_workers,
                           collate_fn=self.collater, worker_init_fn=seed_worker, generator=g) #, worker_init_fn=seed_worker, generator=g
 
     def test_dataloader(self) -> EVAL_DATALOADERS:

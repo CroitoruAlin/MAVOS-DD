@@ -69,7 +69,7 @@ class TALLDetector(AbstractDetector):
         backbone.default_cfg = default_cfg
         load_pretrained(backbone, num_classes=config['num_classes'], in_chans=model_kwargs.get('in_chans', 3),
                         filter_fn=_conv_filter, img_size=config['resolution'], pretrained_window_size=7,
-                        pretrained_model='')
+                        pretrained_model=config['weights_path'])
 
         return backbone
 
@@ -235,8 +235,6 @@ class WindowAttention(nn.Module):
         matrix = attn[0].mean(dim=0)
         matrix = matrix.detach().cpu().numpy()
         matrix = (matrix-matrix.min())/(matrix.max()-matrix.min())
-        print(matrix.shape)
-        np.save(f"./results/matrix_{count}.npy", matrix)
         count+=1
         if mask is not None:
             nW = mask.shape[0]

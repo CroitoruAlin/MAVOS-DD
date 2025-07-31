@@ -18,7 +18,7 @@ from fairseq.data.dictionary import Dictionary
 import model.avhubert.hubert as hubert
 import model.avhubert.hubert_pretraining as hubert_pretraining
 import torchmetrics
-
+import gc
 
 def Average(lst):
     return sum(lst) / len(lst)
@@ -138,7 +138,6 @@ class MRDF_CE(LightningModule):
     def training_step(self, batch: Optional[Union[Tensor, Sequence[Tensor]]] = None, batch_idx: Optional[int] = None,
         hiddens: Optional[Tensor] = None
     ) -> Tensor:
-
         m_logits, v_feats, a_feats, v_logits, a_logits = self(batch['video'], batch['audio'], batch['padding_mask'])
         loss_dict = self.loss_fn(m_logits, v_feats, a_feats, v_logits, a_logits, batch['label'], batch['label'],
                                                batch['label'], batch['label'])
@@ -166,11 +165,11 @@ class MRDF_CE(LightningModule):
             prog_bar=False, sync_dist=self.distributed)
         self.validation_outputs.append({"loss": loss_dict["mm_loss"], "preds": preds.detach(), "targets": batch['label'].detach()})
         return {"loss": loss_dict["mm_loss"], "preds": preds.detach(), "targets": batch['label'].detach()}
-
+    
     def test_step(self, batch: Optional[Union[Tensor, Sequence[Tensor]]] = None, batch_idx: Optional[int] = None,
                         optimizer_idx: Optional[int] = None, hiddens: Optional[Tensor] = None
                         ) -> Tensor:
-
+        # print(batch['video'].shape)
         m_logits, v_feats, a_feats, v_logits, a_logits = self(batch['video'], batch['audio'], batch['padding_mask'])
         loss_dict = self.loss_fn(m_logits, v_feats, a_feats, v_logits, a_logits, batch['label'], batch['label'],
                                                batch['label'], batch['label'])
@@ -188,13 +187,22 @@ class MRDF_CE(LightningModule):
         # results.save_to_disk("./output")
         # print(self.results['label'][-1], self.results['logits'][-1], self.results['video_path'][-1])
         # common and multi-class
+        gc.collect()
         preds = torch.argmax(self.softmax(m_logits), dim=1)
         # self.test_outputs.append({"loss": loss_dict["mm_loss"], "preds": preds.detach(), "targets": batch['label'].detach()})
         return {"loss": loss_dict["mm_loss"], "preds": preds.detach(), "targets": batch['label'].detach()}
 
-
+    def on_train_batch_end(self, training_step_outputs, batch, batch_idx):
+        # print("here")
+        train_acc = self.acc(training_step_outputs['preds'], training_step_outputs['targets']).item()
+        train_auroc = self.auroc(training_step_outputs['preds'], training_step_outputs['targets']).item()
+        
+        self.log("train_acc", train_acc, prog_bar=True)
+        self.log("train_auroc", train_auroc, prog_bar=True)
+        self.log("loss", training_step_outputs['loss'].item(), prog_bar=True)
     def training_step_end(self, training_step_outputs):
         # others: common, ensemble, multi-label
+        print("here")
         train_acc = self.acc(training_step_outputs['preds'], training_step_outputs['targets']).item()
         train_auroc = self.auroc(training_step_outputs['preds'], training_step_outputs['targets']).item()
         

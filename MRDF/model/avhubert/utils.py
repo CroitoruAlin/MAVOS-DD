@@ -45,7 +45,7 @@ def load_video(path, scale_percent):
             vr = VideoReader(path, ctx=cpu(0))
             # frame_count_org = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
             frame_count_org = len(vr)
-            frame_idxs = np.linspace(0, frame_count_org - 1, 30, endpoint=True, dtype=int)
+            frame_idxs = np.linspace(0, frame_count_org - 1, min(30,frame_count_org), endpoint=True, dtype=int)
             frames = vr.get_batch(frame_idxs).asnumpy()
 
             frames  = torch.from_numpy(frames).permute(0,3,1,2).float()
