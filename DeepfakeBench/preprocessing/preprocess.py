@@ -356,7 +356,7 @@ def video_manipulate(
 
     # Iterate through the videos in the dataset and extract faces
     try:
-        facecrop(movie_path, mask_path, Path(f"/home/elrond/projects/DeepfakeBench/datasets/MAVOS-DD/{sub_dataset_name}"), mode, num_frames, stride, face_predictor, face_detector)
+        facecrop(movie_path, mask_path, Path(f"DeepfakeBench/datasets/MAVOS-DD/{sub_dataset_name}"), mode, num_frames, stride, face_predictor, face_detector)
     except Exception as e:
         logger.error(f"Error processing video {movie_path}: {e}")
 

@@ -24,7 +24,7 @@ rearrange:
     default: "MAVOS-DD"
   dataset_root_path: # the root path to the dataset
     type: str
-    default: '/home/elrond/projects/DeepfakeBench/datasets'
+    default: 'DeepfakeBench/datasets'
   output_file_path: # the json path to the dataset
     type: str
     default: '../preprocessing/dataset_json_v6'

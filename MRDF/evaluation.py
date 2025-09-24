@@ -84,7 +84,7 @@ def run_evaluation(metadata, dict_video_label_pred, text):
     print(text, calculate_stats(output, target))
 if __name__ =="__main__":
     predictions = Dataset.load_from_disk("./predictions_pretrained")
-    metadata = Dataset.load_from_disk("/home/fl488644/datasets/MAVOSSDD")
+    metadata = Dataset.load_from_disk("datasets/MAVOSSDD")
     dict_video_label_pred={}
     print(predictions[0])
     for pred in predictions:

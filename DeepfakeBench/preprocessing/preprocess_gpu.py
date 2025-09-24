@@ -82,7 +82,7 @@ class VideoDataset(data.Dataset):
         self.indices = []
         for i, sample in enumerate(tqdm(metadata)):
 
-            output_path = os.path.join("/home/elrond/projects/DeepfakeBench/datasets/MAVOS-DD", "/".join(sample['video_path'].split("/")[:-1]), "frames", sample['video_path'].split("/")[-1][:-4])
+            output_path = os.path.join("DeepfakeBench/datasets/MAVOS-DD", "/".join(sample['video_path'].split("/")[:-1]), "frames", sample['video_path'].split("/")[-1][:-4])
             if os.path.exists(output_path) and len(os.listdir(output_path))>5:
                 continue
             try:
@@ -110,7 +110,7 @@ class VideoDataset(data.Dataset):
         frames = F.interpolate(frames, size=(int(height), int(width)), mode='bilinear', align_corners=False)
         
         frames = frames.permute(0, 2, 3, 1)
-        return frames, os.path.join("/home/elrond/projects/DeepfakeBench/datasets/MAVOS-DD", "/".join(sample['video_path'].split("/")[:-1])), sample['video_path'].split("/")[-1][:-4]
+        return frames, os.path.join("DeepfakeBench/datasets/MAVOS-DD", "/".join(sample['video_path'].split("/")[:-1])), sample['video_path'].split("/")[-1][:-4]
     
 
 def create_logger(log_path):
@@ -398,7 +398,7 @@ def video_manipulate(
 
     # Iterate through the videos in the dataset and extract faces
     try:
-        facecrop(movie_path, mask_path, Path(f"/home/elrond/projects/DeepfakeBench/datasets/MAVOS-DD/{sub_dataset_name}"), mode, num_frames, stride, face_predictor, face_detector)
+        facecrop(movie_path, mask_path, Path(f"DeepfakeBench/datasets/MAVOS-DD/{sub_dataset_name}"), mode, num_frames, stride, face_predictor, face_detector)
     except Exception as e:
         logger.error(f"Error processing video {movie_path}: {e}")
 import einops
