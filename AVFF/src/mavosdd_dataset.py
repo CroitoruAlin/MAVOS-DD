@@ -13,7 +13,7 @@ import csv
 import random
 import time
 from PIL import ImageEnhance
-from memory_profiler import profile
+# from memory_profiler import profile
 import gc
 class RandomCropAndResize:
     def __init__(self, im_res):
@@ -269,11 +269,12 @@ class MavosDD(Dataset):
 
         # Do not perform data augment under eval mode
         if self.mode == 'eval':
-            try:
-                fbank = self._wav2fbank(video_name)
-            except:
-                fbank = torch.zeros([self.target_length, 128]) + 0.01
-                print('there is an error in loading audio')
+            # try:
+                # print(video_name)
+            fbank = self._wav2fbank(video_name)
+            # except:
+            #     fbank = torch.zeros([self.target_length, 128]) + 0.01
+            #     print('there is an error in loading audio')
             
             frames = self._get_frames(video_name)
             # frames = [self.preprocess(frame) for frame in frames]
@@ -350,6 +351,7 @@ class MavosDD(Dataset):
         # fbank shape is [time_frame_num, frequency_bins], e.g., [1024, 128]
         # frames: (T, C, H, W) -> (C, T, H, W)
         frames = frames.permute(1, 0, 2, 3)
+        
         
         label = torch.tensor([int(label), 1-int(label)]).float()
 

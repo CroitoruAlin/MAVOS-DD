@@ -11,9 +11,9 @@ from src.utilities.stats import calculate_stats
 from src.mavosdd_dataset import MavosDD
 from src.exddv_dataset import ExDDV
 from src.custom_dataset import CustomDDV
+import torch
 
-
-DATASET_INPUT_PATH = "/mnt/d/projects/datasets/MAVOS-DD"
+DATASET_INPUT_PATH = "/home/biodeep/alin/datasets/MAVOS-DD"
 CHECKPOINT_PATH = "checkpoints/avff_mavos.pth"
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
