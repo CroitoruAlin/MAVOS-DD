@@ -1,0 +1,14 @@
+{
+    "checkpoint_path": "checkpoints/avff_mavos.pth",
+    "num_mel_bins": 128,
+    "target_length": 1024,
+    "freqm": 0,
+    "timem": 0, 
+    "mixup": 0,
+    "mode":"eval",
+    "mean": -5.081,
+    "std": 4.4849,
+    "noise": false,
+    "im_res": 224,
+    "num_frames": 16
+}
