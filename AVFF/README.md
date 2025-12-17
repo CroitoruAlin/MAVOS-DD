@@ -27,8 +27,11 @@ pip install torch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 --index-url https
 Download the weights from: https://huggingface.co/acroitoru/avff_mavos
 ## Inference
 
-Use `inference.py` and set the global variables to their correct values (i.e. actual path to the dataset and actual path to the fine-tuned model).
+Use `inference_single_video.py` and set the checkpoint path in `configs/config.json`.
 
-## Performance metrics
-
-To compute the performance metrics use the `eval.py` script.
+Usage examples:
+```
+python ./inference_single_video.py --video_path assets/real
+python ./inference_single_video.py --video_path assets/real/9rjQ5sfeUTg_out_151_2.mp4
+```
+Each comand will generate a `result.json` file.

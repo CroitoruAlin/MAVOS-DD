@@ -6,7 +6,7 @@ import numpy as np
 from torch.cuda.amp import autocast
 import json
 from tqdm import tqdm
-from datasets import load_from_disk
+from datasets import load_from_disk, load_dataset
 import os
 import datasets
 import torchaudio
@@ -20,7 +20,8 @@ from src.exddv_dataset import ExDDV
 from src.custom_dataset import CustomDDV
 import torch
 import json
-
+import argparse
+import glob
 class DeepfakeDetector():
     
     def __init__(self, config_path):
@@ -58,16 +59,14 @@ class DeepfakeDetector():
         return fbank
 
     def _get_frames(self, video_name):
-        try:
-            vr = VideoReader(video_name)
-            total_frames = len(vr) 
-            frame_indices = np.linspace(0, total_frames - 1, self.config['num_frames']).astype(int)
-            start_time =time.time()
-            frames = vr.get_batch(frame_indices).asnumpy()
-            frames = [self.preprocess(frame)  for frame in frames]
-            print(f"Reading time: {time.time()-start_time}, {len(vr)}")
-        except:
-            frames = [torch.zeros(3, 224, 224) for i in range(self.config['num_frames'])]
+        vr = VideoReader(video_name)
+        total_frames = len(vr) 
+        frame_indices = np.linspace(0, total_frames - 1, self.config['num_frames']).astype(int)
+        # start_time =time.time()
+        frames = vr.get_batch(frame_indices).asnumpy()
+        frames = [self.preprocess(frame)  for frame in frames]
+        
+ 
             
         return frames
 
@@ -99,7 +98,9 @@ class DeepfakeDetector():
         frames = frames.to(device)
         with autocast():
             with torch.no_grad():
-                print(fbank.shape, frames.shape)
+                # print(fbank.shape, frames.shape)
+                # print(torch.amax(fbank),torch.amin(fbank),torch.amax(frames),torch.amin(frames))
+                # exit()
                 output = self.model(fbank, frames)
                 output = F.softmax(output, dim=-1).cpu().numpy()
         output = {'real_score': output[0][1], 'fake_score': output[0][0]}
@@ -107,17 +108,41 @@ class DeepfakeDetector():
         return output
         
 if __name__ == "__main__":
-   
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--video_path", type=str, required=True)
+    args = parser.parse_args()
     df_detector = DeepfakeDetector("configs/config.json")
-    ds_path = "/home/biodeep/alin/datasets/MAVOS-DD"
-    ds = load_from_disk(ds_path).filter(lambda sample: sample['split']=='test')
-    ds = ds.shuffle(seed=42)[:1000]
-    predictions = []
-    labels = []
-    for i, video in enumerate(tqdm(ds['video_path'])):
-        video_path = os.path.join(ds_path, video)
-        labels.append(1 if ds['label'][i] == 'fake' else 0 )
-        output = df_detector.analyze_video(video_path)
-        predictions.append(1 if output['real_score']< output['fake_score'] else 0)
-        print(video, ds['label'][i], output)
-    print("Accuracy: ", np.mean(np.array(predictions)== np.array(labels)))
+    if os.path.isdir(args.video_path):
+        video_paths = glob.glob(f"{args.video_path}/*.mp4")
+        result = []
+        for video in video_paths:
+            output = df_detector.analyze_video(video)
+            output["fake_score"] = str(output["fake_score"])
+            output["real_score"] = str(output["real_score"])
+            output["video"] = video
+            result.append(output)
+        with  open('result.json', 'w') as f:
+            json.dump(result, f, indent=4)
+        print(result)
+    else:
+        
+        output = df_detector.analyze_video(args.video_path)
+        output["fake_score"] = str(output["fake_score"])
+        output["real_score"] = str(output["real_score"])
+        output["video"] = args.video_path
+        print(output)
+        with  open('result.json', 'w') as f:
+            json.dump(output, f, indent=4)
+    # df_detector = DeepfakeDetector("configs/config.json")
+    # ds_path = "/home/biodeep/alin/datasets/MAVOS-DD"
+    # ds = load_from_disk(ds_path).filter(lambda sample: sample['split']=='test' and sample['language']=='romanian' and sample['generative_method']=='inswapper')
+    # ds = ds.shuffle(seed=42)[:1000]
+    # predictions = []
+    # labels = []
+    # for i, video in enumerate(tqdm(ds['video_path'])):
+    #     video_path = os.path.join(ds_path, video)
+    #     labels.append(1 if ds['label'][i] == 'fake' else 0 )
+    #     output = df_detector.analyze_video(video_path)
+    #     predictions.append(1 if output['real_score']< output['fake_score'] else 0)
+
+    # print("Accuracy: ", np.mean(np.array(predictions)== np.array(labels)))
