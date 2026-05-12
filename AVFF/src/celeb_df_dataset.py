@@ -15,6 +15,9 @@ import time
 from PIL import ImageEnhance
 # from memory_profiler import profile
 import gc
+from datasets import Features, Value
+import datasets
+import glob
 class RandomCropAndResize:
     def __init__(self, im_res):
         self.im_res = im_res
@@ -39,12 +42,23 @@ class RandomColor:
         return ImageEnhance.Color(x).enhance(self.factor)
 
 
-class MavosDD(Dataset):
-    def __init__(self, dataset, input_path, audio_conf, stage, num_frames=16):
+class CelebDF(Dataset):
+    def __init__(self, input_path, audio_conf, stage, num_frames=16):
         self.num_frames = num_frames
         self.stage = stage
 
-        self.dataset = dataset
+        def gen_path():
+            for dir_videos in os.listdir(input_path):
+                dir_path = os.path.join(input_path, dir_videos)
+                if not os.path.isdir(dir_path):
+                    continue
+                video_paths = glob.glob(os.path.join(dir_path,"**/*.mp4"))
+                for video_path in video_paths:
+                    # video_path = os.path.join(dir_path, video_name)
+                    out_dir = {"video_path": video_path, 'label': 'fake' if 'synthesis' in dir_videos else 'real'}
+                    yield out_dir
+
+        self.dataset = datasets.Dataset.from_generator(gen_path, features=Features({"video_path":Value("string"), "label":Value("string")}))
         self.input_path = input_path
 
         print('Dataset has {:d} samples'.format(len(self.dataset)))
@@ -173,6 +187,8 @@ class MavosDD(Dataset):
             start_time =time.time()
             # Read the frames using the calculated indices
             frames = vr.get_batch(frame_indices).asnumpy()
+            # PIL.Image.fromarray(frames[0].astype(np.uint8)).save("frame_celebdf.png")
+            # exit()
             frames = [self.preprocess(frame)  for frame in frames]
             # print(f"Reading time: {time.time()-start_time}, {len(vr)}")
         except:
@@ -273,15 +289,15 @@ class MavosDD(Dataset):
                 fbank = self._wav2fbank(video_name)
             except:
                 fbank = torch.zeros([self.target_length, 128]) + 0.01
-                print(f'there is an error in loading audio, {sample["video_path"]}')
+                # print(f'there is an error in loading audio, {sample["video_path"]}')
             
             frames = self._get_frames(video_name)
             # frames = [self.preprocess(frame) for frame in frames]
             frames = torch.stack(frames)
         
         else:
-            # Data Augment
             augment=None
+            # Data Augment
             if self.stage == 1:
                 augment = random.choices(self.augment_1, weights=self.augment_1_weight)[0]
             elif self.stage == 2:
@@ -295,7 +311,7 @@ class MavosDD(Dataset):
                     fbank = self._wav2fbank(video_name)
                 except:
                     fbank = torch.zeros([self.target_length, 128]) + 0.01
-                    print(f'there is an error in loading audio, {sample["video_path"]}')
+                    # print(f'there is an error in loading audio, {sample["video_path"]}')
                     
                 if show_time: print(f"Step 2: ", time.time() - start_time)
                 if show_time: start_time = time.time()

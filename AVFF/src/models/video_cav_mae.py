@@ -5,7 +5,10 @@ from .visual_modules import VisualEncoder, VisualDecoder
 from .fusion_modules import A2VNetwork, V2ANetwork
 import random
 from einops import rearrange
-
+import torch
+import torch.nn as nn
+import json
+from .aasist import Model as AASIST_Net
 class MLP(nn.Module):
     def __init__(self, input_size, hidden_size, num_classes, drop_rate=[0.5, 0.5]):
         super(MLP, self).__init__()
@@ -396,3 +399,170 @@ class VideoCAVMAEFT(nn.Module):
         output = self.mlp_head(torch.concat((video_fusion, audio_fusion), dim=-1))
         
         return output
+
+class VideoCAVMAEAASISTFT(nn.Module):
+    def __init__(self, 
+        n_classes=2,
+        img_size=224,
+        patch_size=16, 
+        n_frames=16, 
+        audio_length=1024,
+        mel_bins=128,
+        encoder_embed_dim=768,
+        encoder_depth=12,
+        encoder_num_heads=12,
+        mlp_ratio=4., 
+        qkv_bias=False, 
+        qk_scale=None, 
+        drop_rate=0., 
+        attn_drop_rate=0.,
+        norm_layer="LayerNorm",
+        init_values=0.,
+        tubelet_size=2,
+        norm_pix_loss=True,
+        aasist_config="src/models/AASIST.conf"
+    ):
+        super().__init__()
+        
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        
+        self.patch_size = patch_size
+        self.norm_pix_loss = norm_pix_loss
+        self.n_frames = n_frames
+        
+        self.audio_encoder = AudioEncoder(
+            audio_length=audio_length,
+            mel_bins=mel_bins,
+            patch_size=patch_size,
+            embed_dim=encoder_embed_dim,
+            num_heads=encoder_num_heads,
+            encoder_depth=encoder_depth,
+            qkv_bias=qkv_bias,
+            qk_scale=qk_scale,
+            drop_rate=drop_rate,
+            attn_drop_rate=attn_drop_rate,
+        )
+        self.visual_encoder = VisualEncoder(
+            img_size=img_size, 
+            patch_size=patch_size, 
+            n_frames=n_frames, 
+            embed_dim=encoder_embed_dim, 
+            depth=encoder_depth,
+            num_heads=encoder_num_heads,
+            mlp_ratio=mlp_ratio,
+            qkv_bias=qkv_bias,
+            qk_scale=qk_scale,
+            drop_rate=drop_rate,
+            attn_drop_rate=attn_drop_rate,
+            norm_layer=norm_layer,
+            init_values=init_values,
+            tubelet_size=tubelet_size
+        )
+        self.a2v = A2VNetwork(
+            audio_dim=64 * self.n_frames // 2,
+            visual_dim=196 * self.n_frames // 2,
+            embed_dim=encoder_embed_dim,
+            num_heads=encoder_num_heads
+        )
+        self.v2a = V2ANetwork(
+            audio_dim=64 * self.n_frames // 2,
+            visual_dim=196 * self.n_frames // 2,
+            embed_dim=encoder_embed_dim,
+            num_heads=encoder_num_heads
+        )
+        
+        hidden_dim = 1024
+        self.mlp_vision = torch.nn.Linear(1568, hidden_dim)
+        self.mlp_audio = torch.nn.Linear(512, hidden_dim)
+        self.mlp_head = MLP(input_size=hidden_dim * 2, hidden_size=hidden_dim, num_classes=n_classes)
+        self.aasist = create_visual_aasist(aasist_config, visual_dim=768)
+    
+    def patchify(self, imgs, c, h, w, p=16):
+        """
+        imgs: (N, 3, H, W)
+        x: (N, L, patch_size**2 *3)
+        """
+        x = imgs.reshape(shape=(imgs.shape[0], c, h, p, w, p))
+        x = torch.einsum('nchpwq->nhwpqc', x)
+        x = x.reshape(shape=(imgs.shape[0], h * w, p ** 2 * c))
+        return x
+
+    def unpatchify(self, x, c, h, w, p=16):
+        """
+        x: (N, L, patch_size**2 *3)
+        imgs: (N, 3, H, W)
+        """
+        assert h * w == x.shape[1]
+
+        x = x.reshape(shape=(x.shape[0], h, w, p, p, c))
+        x = torch.einsum('nhwpqc->nchpwq', x)
+        imgs = x.reshape(shape=(x.shape[0], c, h * p, w * p))
+        return imgs
+    
+    def forward(self, audio, video):
+        # audio: (B, 1024, 128)
+        # video: (B, 3, 16, 224, 224)
+        
+        # Forward audio and video through their respective encoders
+        audio_emb = self.audio_encoder(audio)
+        video_emb = self.visual_encoder(video)
+        # Rearrange audio and video embeddings to perform temporal complementary mask
+        b, t, c = audio_emb.shape
+        audio_emb = audio_emb.reshape(b, self.n_frames // 2, -1, c)
+        b, t, c = video_emb.shape
+        video_emb = video_emb.reshape(b, self.n_frames // 2, -1, c)
+        
+        # exit()
+        video_fusion = self.a2v(audio_emb)
+        audio_fusion = self.v2a(video_emb)
+        # Concat along feature dimension
+        video_fusion = torch.concat((video_fusion, video_emb), dim=-2)
+        audio_fusion = torch.concat((audio_fusion, audio_emb), dim=-2)
+        video_fusion = video_fusion.mean(dim=1)
+        audio_fusion = audio_fusion.mean(dim=1)
+        
+        # video_fusion = rearrange(video_fusion, 'b t c -> b (t c)')
+        # audio_fusion = rearrange(audio_fusion, 'b t c -> b (t c)')
+        
+        # video_fusion = self.mlp_vision(video_fusion)
+        # audio_fusion = self.mlp_audio(audio_fusion)
+        # print(video_fusion.shape, audio_fusion.shape)
+        output_embeddings, logits  = self.aasist(torch.concat((video_fusion, audio_fusion), dim=1))
+        # output = self.mlp_head(torch.concat((video_fusion, audio_fusion), dim=-1))
+        
+        return logits
+
+class VisualToGraphSpace(nn.Module):
+    def __init__(self, visual_dim=768, target_channels=70):
+        super().__init__()
+        self.proj = nn.Conv1d(in_channels=visual_dim, out_channels=target_channels, kernel_size=1)
+
+    def forward(self, x):
+        x = x.squeeze(1) 
+        x = x.transpose(1, 2)
+        x = self.proj(x)
+        
+        return x
+
+def create_visual_aasist(config_path, visual_dim=260):
+    with open(config_path, 'r') as f:
+        config = json.load(f)
+        
+    model = AASIST_Net(config['model_config'])
+    del model.conv_time
+    model.conv_time = VisualToGraphSpace(visual_dim=visual_dim, target_channels=70)
+    
+    return model
+
+if __name__ == "__main__":
+    VISUAL_DIM = 768
+    BATCH_SIZE = 16
+    T_FRAMES = 150
+    
+    model = create_visual_aasist('AASIST.conf', visual_dim=VISUAL_DIM)
+    dummy_video_features = torch.randn(BATCH_SIZE, T_FRAMES, VISUAL_DIM)
+    
+    logits, hidden_state = model(dummy_video_features)
+    
+    print(f"Input shape: {dummy_video_features.shape}")
+    print(f"Logits shape (Real/Fake): {logits.shape}")

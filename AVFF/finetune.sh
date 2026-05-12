@@ -21,11 +21,11 @@ lr_adapt=False
 pretrain_path=checkpoints/stage-3.pth
 
 
-save_dir=./exp/stage-3
+save_dir=./exp/full_finetune
 mkdir -p $save_dir
 mkdir -p ${save_dir}/models
 
-CUDA_VISIBLE_DEVICES=0 python -m memory_profiler  ./src/run_ft.py --input_path /mnt/d/projects/datasets/MAVOS-DD \
+CUDA_VISIBLE_DEVICES=0 python -m memory_profiler  ./src/run_ft.py --input_path /mnt/data/datasets/MAVOS-DD \
 --save-dir $save_dir --n_classes 2 \
 --lr $lr --n-epochs ${epoch} --batch-size $batch_size \
 --lrscheduler_start ${lrscheduler_start} --lrscheduler_decay ${lrscheduler_decay} --lrscheduler_step ${lrscheduler_step} \
@@ -36,4 +36,4 @@ CUDA_VISIBLE_DEVICES=0 python -m memory_profiler  ./src/run_ft.py --input_path /
 --loss BCE --metrics mAP --warmup True \
 --wa_start ${wa_start} --wa_end ${wa_end} --lr_adapt ${lr_adapt} \
 --head_lr ${head_lr} \
---pretrain_path ${pretrain_path} --num_workers 18
+--pretrain_path ${pretrain_path} --num_workers 15

@@ -15,6 +15,9 @@ import time
 from PIL import ImageEnhance
 # from memory_profiler import profile
 import gc
+from datasets import Features, Value
+import datasets
+import glob
 class RandomCropAndResize:
     def __init__(self, im_res):
         self.im_res = im_res
@@ -39,12 +42,21 @@ class RandomColor:
         return ImageEnhance.Color(x).enhance(self.factor)
 
 
-class MavosDD(Dataset):
-    def __init__(self, dataset, input_path, audio_conf, stage, num_frames=16):
+class Biodeep(Dataset):
+    def __init__(self, input_path, audio_conf, stage, num_frames=16):
         self.num_frames = num_frames
         self.stage = stage
 
-        self.dataset = dataset
+        def gen_path():
+            for dir_videos in os.listdir(input_path):
+                dir_path = os.path.join(input_path, dir_videos)
+                if not os.path.isdir(dir_path):
+                    continue
+                video_paths = glob.glob(os.path.join(dir_path,"**/*.mp4"))
+                for video_path in video_paths:
+                    yield {"video_path": video_path, 'label': 'fake' if 'fake' in dir_videos else 'real'}
+
+        self.dataset = datasets.Dataset.from_generator(gen_path, features=Features({"video_path":Value("string"), "label":Value("string")}))
         self.input_path = input_path
 
         print('Dataset has {:d} samples'.format(len(self.dataset)))

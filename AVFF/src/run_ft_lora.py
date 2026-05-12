@@ -37,42 +37,32 @@ def train(model, train_loader, test_loader, args):
     start_time = time.time()
     exp_dir = args.save_dir
     
-    if not isinstance(model, torch.nn.DataParallel):
-        model = torch.nn.DataParallel(model)
+    # if not isinstance(model, torch.nn.DataParallel):
+    #     model = torch.nn.DataParallel(model)
     
     model.to(device)
     
     # possible mlp layer name list, mlp layers are newly initialized layers in the finetuning stage (i.e., not pretrained) and should use a larger lr during finetuning
-    mlp_list = [
-        'a2v.mlp.linear.weight',
-        'a2v.mlp.linear.bias',
-        'v2a.mlp.linear.weight',
-        'v2a.mlp.linear.bias',
-        'mlp_vision.weight',
-        'mlp_vision.bias',
-        'mlp_audio.weight',
-        'mlp_audio.bias',
-        'mlp_head.fc1.weight',
-        'mlp_head.fc1.bias',
-        'mlp_head.fc2.weight',
-        'mlp_head.fc2.bias'
-    ]
-    mlp_params = list(filter(lambda kv: kv[0] in mlp_list, model.module.named_parameters()))
-    base_params = list(filter(lambda kv: kv[0] not in mlp_list, model.module.named_parameters()))
-    mlp_params = [i[1] for i in mlp_params]
-    base_params = [i[1] for i in base_params]
+    mlp_params = []
+    lora_params = []
+    for name, param in model.named_parameters():
+        if param.requires_grad:
+            if any(key in name for key in mlp_modules):
+                mlp_params.append(param)
+            else:
+                lora_params.append(param)
     
     trainables = [p for p in model.parameters() if p.requires_grad]
     print('Total parameter number is : {:.3f} million'.format(sum(p.numel() for p in model.parameters()) / 1e6))
     print('Total trainable parameter number is : {:.3f} million'.format(sum(p.numel() for p in trainables) / 1e6))
-    optimizer = torch.optim.Adam([{'params': base_params, 'lr': args.lr}, {'params': mlp_params, 'lr': args.lr * args.head_lr}], weight_decay=5e-7, betas=(0.95, 0.999))
+    optimizer = torch.optim.Adam([{'params': lora_params, 'lr': args.lr}, {'params': mlp_params, 'lr': args.lr * args.head_lr}], weight_decay=5e-7, betas=(0.95, 0.999))
     base_lr = optimizer.param_groups[0]['lr']
     mlp_lr = optimizer.param_groups[1]['lr']
     lr_list = [args.lr, mlp_lr]
     print('base lr, mlp lr : ', base_lr, mlp_lr)
     
     print('Total newly initialized MLP parameter number is : {:.3f} million'.format(sum(p.numel() for p in mlp_params) / 1e6))
-    print('Total pretrained backbone parameter number is : {:.3f} million'.format(sum(p.numel() for p in base_params) / 1e6))
+    print('Total pretrained backbone parameter number is : {:.3f} million'.format(sum(p.numel() for p in lora_params) / 1e6))
     
     scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, list(range(args.lrscheduler_start, 1000, args.lrscheduler_step)),gamma=args.lrscheduler_decay)
     main_metrics = args.metrics
@@ -101,9 +91,9 @@ def train(model, train_loader, test_loader, args):
         A_predictions = []
         A_targets = []
         start_time = time.time()
-        # train_loader = DataLoader(
-        #     create_random_balanced_dataset(mavos_dd_train, celebdf, avlips), batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True
-        #     )
+        train_loader = DataLoader(
+            create_random_balanced_dataset(mavos_dd_train, celebdf, avlips), batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True
+            )
         for i, (a_input, v_input, labels, _) in enumerate(tqdm(train_loader)):
             # print(f"step 1: ", time.time() - start_time)
             # start_time = time.time()
@@ -207,11 +197,16 @@ def train(model, train_loader, test_loader, args):
                 best_epoch = epoch
 
         if best_epoch == epoch:
-            torch.save(model.state_dict(), "%s/models/best_audio_model.pth" % (exp_dir))
+            # torch.save(model.state_dict(), "%s/models/best_audio_model.pth" % (exp_dir))
+            os.makedirs("%s/models/best_audio_model" % (exp_dir), exist_ok=True)
+            model.save_pretrained("%s/models/best_audio_model" % (exp_dir))
+            
             torch.save(optimizer.state_dict(), "%s/models/best_optim_state.pth" % (exp_dir))
         if args.save_model == True:
-            torch.save(model.state_dict(), "%s/models/audio_model.%d.pth" % (exp_dir, epoch))
-        
+            #torch.save(model.state_dict(), "%s/models/audio_model.%d.pth" % (exp_dir, epoch))
+            os.makedirs("%s/models/audio_model_%d" % (exp_dir, epoch), exist_ok=True)
+            model.save_pretrained("%s/models/audio_model_%d" % (exp_dir, epoch))
+            
         if isinstance(scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
             if main_metrics == 'mAP':
                 scheduler.step(mAP)
@@ -347,27 +342,23 @@ print('current mae loss {:.3f}, and contrastive loss {:.3f}'.format(args.mae_los
 
 input_path = args.input_path
 mavos_dd = datasets.Dataset.load_from_disk(input_path)
-mavos_dd_train =  MavosDD(mavos_dd.filter(lambda sample: sample['split']=="train" and not(sample['audio_fake'] and sample['video_fake']) and not sample['audio_fake']), input_path, audio_conf, stage=3, num_frames=16)
+mavos_dd_train =  MavosDD(mavos_dd.filter(lambda sample: sample['split']=="train"), input_path, audio_conf, stage=3, num_frames=16)
 celebdf = CelebDF("/mnt/data/datasets/celebdf_v2_preprocessed", audio_conf, stage=3, num_frames=16)
 avlips = AVLips("/mnt/data/datasets/AVLips_preprocessed", audio_conf, stage=3, num_frames=16)
 fakeavceleb_dataset = FakeAVCeleb("../../datasets/FakeAVCeleb", audio_conf, stage=3, num_frames=16)
 faceforensics = FaceForensics("/mnt/data/datasets/faceforensics", audio_conf, stage=3, num_frames=16)
 final_ds = create_random_balanced_dataset(mavos_dd_train, celebdf, avlips)
 train_loader = DataLoader(
-   mavos_dd_train, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True
+   final_ds, batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True
 )
 val_ds = MavosDD(mavos_dd.filter(lambda sample: sample['split']=="validation"), input_path, audio_conf, stage=3, num_frames=16)
 val_loader = DataLoader(
-    val_ds,
+    fakeavceleb_dataset,
     batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True, drop_last=False
 )
-values = []
-check_ds = mavos_dd_train.dataset
-for i,audio_fake in enumerate(check_ds['audio_fake']):
-    values.append((audio_fake, check_ds[i]['video_fake']))
-print(set(values))
-# print(f"Using Train: {len(train_loader)}, Eval: {len(val_loader)}")
-# exit()
+
+print(f"Using Train: {len(train_loader)}, Eval: {len(val_loader)}")
+
 # Construct model
 cavmae_ft = VideoCAVMAEFT(n_frames=16, audio_length=1024)#VideoCAVMAEFT(n_frames=16, audio_length=1024)#VideoCAVMAEAASISTFT(n_frames=16, audio_length=2048)#VideoCAVMAEFT()
 
@@ -375,7 +366,7 @@ cavmae_ft = VideoCAVMAEFT(n_frames=16, audio_length=1024)#VideoCAVMAEFT(n_frames
 if args.pretrain_path is not None:
     mdl_weight = torch.load(args.pretrain_path, map_location='cpu')
     # if not isinstance(cavmae_ft, torch.nn.DataParallel):
-    #     cavmae_ft = torch.nn.DataParallel(cavmae_ft)
+        # cavmae_ft = torch.nn.DataParallel(cavmae_ft)
     new_dict = {}
     for key in mdl_weight:
         new_dict[key[7:]] = mdl_weight[key]
@@ -390,7 +381,17 @@ if args.pretrain_path is not None:
     
 else:
     warnings.warn("Note you are finetuning a model without any finetuning.")
-    
+from peft import LoraConfig, get_peft_model
+mlp_modules = [
+        'a2v.mlp.linear',
+        'v2a.mlp.linear',
+        'mlp_vision',
+        'mlp_audio',
+        'mlp_head.fc1',
+        'mlp_head.fc2',
+    ]
+lora_config = LoraConfig(r=16, lora_alpha=32, target_modules = ['qkv', 'proj'], lora_dropout=0.05, bias='none', modules_to_save=mlp_modules)
+cavmae_ft = get_peft_model(cavmae_ft, lora_config)
 print("\n Creating experiment directory: %s"%args.save_dir)
 if not os.path.exists(args.save_dir):
     os.makedirs(args.save_dir)

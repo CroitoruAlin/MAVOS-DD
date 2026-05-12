@@ -82,7 +82,8 @@ def train(model, train_loader, test_loader, args):
         print('---------------')
         print(datetime.datetime.now())
         print("current #epochs=%s, #steps=%s" % (epoch, global_step))
-        
+        A_predictions = []
+        A_targets = []
         start_time = time.time()
         for i, (a_input, v_input, labels, _) in enumerate(tqdm(train_loader)):
             # print(f"step 1: ", time.time() - start_time)
@@ -106,6 +107,8 @@ def train(model, train_loader, test_loader, args):
                 loss = loss_fn(output, labels)
                 # print(f"step 4: ", time.time() - start_time)
                 # start_time = time.time()
+                A_predictions.append(output.to('cpu').detach())
+                A_targets.append(labels.to('cpu'))
             
             optimizer.zero_grad()
             scaler.scale(loss).backward()
@@ -125,6 +128,18 @@ def train(model, train_loader, test_loader, args):
             print_step = print_step or early_print_step
 
             if print_step and global_step != 0:
+                audio_output = torch.cat(A_predictions)
+                target = torch.cat(A_targets)
+                stats = calculate_stats(audio_output.cpu(), target.cpu())
+                mAP = np.mean([stat['AP'] for stat in stats])
+                mAUC = np.mean([stat['auc'] for stat in stats])
+                acc = stats[0]['acc'] # this is just a trick, acc of each class entry is the same, which is the accuracy of all classes, not class-wise accuracy
+
+                if main_metrics == 'mAP':
+                    print("mAP: {:.6f}".format(mAP))
+                else:
+                    print("acc: {:.6f}".format(acc))
+                print("AUC: {:.6f}".format(mAUC))
                 print('Epoch: [{0}][{1}/{2}]\t'
                   'Per Sample Total Time {per_sample_time.avg:.5f}\t'
                   'Per Sample Data Time {per_sample_data_time.avg:.5f}\t'

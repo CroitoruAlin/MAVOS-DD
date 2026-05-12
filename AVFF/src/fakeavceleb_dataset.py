@@ -15,6 +15,7 @@ import time
 from PIL import ImageEnhance
 # from memory_profiler import profile
 import gc
+from datasets import Features, Value
 class RandomCropAndResize:
     def __init__(self, im_res):
         self.im_res = im_res
@@ -39,12 +40,36 @@ class RandomColor:
         return ImageEnhance.Color(x).enhance(self.factor)
 
 
-class MavosDD(Dataset):
-    def __init__(self, dataset, input_path, audio_conf, stage, num_frames=16):
+class FakeAVCeleb(Dataset):
+    def __init__(self, input_path, audio_conf, stage, num_frames=16):
         self.num_frames = num_frames
         self.stage = stage
 
-        self.dataset = dataset
+        def gen_path():
+            for dir_videos in os.listdir(input_path):
+                dir_path = os.path.join(input_path, dir_videos)
+                if not os.path.isdir(dir_path):
+                    continue
+                for category in os.listdir(dir_path):
+                    category_path = os.path.join(dir_path, category)
+                    for gender in os.listdir(category_path):
+                        gender_path = os.path.join(category_path, gender)
+                        for identity in os.listdir(gender_path):
+                            identity_path = os.path.join(gender_path, identity)
+                            for video_name in os.listdir(identity_path):
+                                    video_path = os.path.join(identity_path, video_name)
+                                    final_video=video_name
+                                # for final_video in os.listdir(video_path):
+                                    # print(final_video)
+                                    if '.mp4' in final_video:
+                                        # final_video_path = os.path.join(video_path, final_video)
+                                        final_video_path = video_path
+                                        # print(video_path)
+                                        label = 'real' if 'RealVideo-RealAudio' == dir_videos else 'fake'
+                                        out_dir = {"video_path": final_video_path, 'label': label}
+                                        yield out_dir
+
+        self.dataset = datasets.Dataset.from_generator(gen_path, features=Features({"video_path":Value("string"), "label":Value("string")}))
         self.input_path = input_path
 
         print('Dataset has {:d} samples'.format(len(self.dataset)))
@@ -170,9 +195,12 @@ class MavosDD(Dataset):
         
             # Calculate the indices to sample uniformly
             frame_indices = np.linspace(0, total_frames - 1, self.num_frames).astype(int)
-            start_time =time.time()
+
+            # start_time =time.time()
             # Read the frames using the calculated indices
             frames = vr.get_batch(frame_indices).asnumpy()
+            # PIL.Image.fromarray(frames[0].astype(np.uint8)).save("frame_fakeavceleb.png")
+            # exit()
             frames = [self.preprocess(frame)  for frame in frames]
             # print(f"Reading time: {time.time()-start_time}, {len(vr)}")
         except:
@@ -263,10 +291,9 @@ class MavosDD(Dataset):
         sample = self.dataset[index]
         if show_time: print(f"Step 1: ", time.time() - start_time)
         if show_time: start_time = time.time()
-        
-        video_name = os.path.join(self.input_path,sample["video_path"])
+        video_name = os.path.join(sample["video_path"])
         label = 0 if sample["label"] == "real" else 1
-        # print(video_name, label)
+
         # Do not perform data augment under eval mode
         if self.mode == 'eval':
             try:

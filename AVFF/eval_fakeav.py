@@ -85,64 +85,33 @@ def evaluate_model(dataset):
     return stats   
     
 if __name__ == "__main__":
-    with open("predictions_old_2.json") as input_json_file:
+    with open("predictions_fakeavceleb_finetuned_on_mavos_avlips_celebdf.json") as input_json_file:
         preds_json = json.load(input_json_file)
-    with open("predictions_delta_eccv.json") as input_json_file:
-        preds_json_2 = json.load(input_json_file)
-    with open("predictions_delta_real.json") as input_json_file:
-        preds_json_3 = json.load(input_json_file)
     # print(len(preds_json))
-    mavos_dd = datasets.Dataset.load_from_disk(DATASET_INPUT_PATH)
-    
-    split_closed_set = mavos_dd.filter(lambda sample: sample['split']=="test" and sample['open_set_model']==False and sample["open_set_language"]==False)
-    print( mavos_dd.filter(lambda sample: sample['split']=="test" and  not sample['audio_fake'] and not sample['video_fake']))
-    split_to_evaluate = "closed-set"
-    split_to_evaluate = "open-model"
-    split_to_evaluate = "open-language"
-    split_to_evaluate = "open-set"
-    for split_to_evaluate in ["closed-set", "open-model", "open-language",  "open-set"]:
-        if split_to_evaluate == "closed-set":
-            # Test closed-set
-            curr_split = split_closed_set
-        elif split_to_evaluate == "open-model":
-            # Open model
-            curr_split = datasets.concatenate_datasets([
-                split_closed_set,
-                mavos_dd.filter(lambda sample: sample['split']=="test" and sample['open_set_model']==True and sample["open_set_language"]==False)
-            ])
-        elif split_to_evaluate == "open-language":
-            # Open language
-            curr_split = datasets.concatenate_datasets([
-                split_closed_set,
-                mavos_dd.filter(lambda sample: sample['split']=="test" and sample['open_set_model']==False and sample["open_set_language"]==True)
-            ])
-        elif split_to_evaluate == "open-set":
-            # Open set
-            curr_split = mavos_dd.filter(lambda sample: sample['split']=="test")
-
-        y_pred = []
-        y_true = []
-        for sample in curr_split:
-            if sample["video_path"] in preds_json:
-                entry = preds_json[sample["video_path"]]
-            elif sample["video_path"] in preds_json_2:
-                entry = preds_json_2[sample['video_path']]
-            else:
-                entry = preds_json_3[sample['video_path']]
-            y_pred.append(entry["pred"])
-            y_true.append(entry["true"])
+    y_pred = []
+    y_true = []
+    answer = {}
+    for preds in [preds_json]:
+        for video_path in preds:
+            if video_path not in answer:
+                answer[video_path] = True
+                entry = preds[video_path]
+                y_pred.append(entry["pred"])
+                y_true.append(entry["true"])
             
             # print(sample['video_path'], entry)
-            
-        stats = calculate_stats(torch.tensor(y_pred), torch.tensor(y_true))
-        
-        mAP = np.mean([stat['AP'] for stat in stats])
-        mAUC = np.mean([stat['auc'] for stat in stats])
-        acc = stats[0]['acc'] # this is just a trick, acc of each class entry is the same, which is the accuracy of all classes, not class-wise accuracy
-        
-        print(f"{split_to_evaluate}: {mAP=}, {mAUC=}, {acc=}\n")
-
-        # plot_confusion_matrix_percent(np.argmax(y_true, axis=1), np.argmax(y_pred, axis=1), name=split_to_evaluate)
+    # print(set(y_true))
+    # exit()
+    print(y_true[0])
+    print(np.unique(np.argmax(np.array(y_true), axis=1), return_counts=True))
+    stats = calculate_stats(torch.tensor(y_pred), torch.tensor(y_true))
+    
+    mAP = np.mean([stat['AP'] for stat in stats])
+    mAUC = np.mean([stat['auc'] for stat in stats])
+    acc = stats[0]['acc'] # this is just a trick, acc of each class entry is the same, which is the accuracy of all classes, not class-wise accuracy
+    
+    print(f"fakeav: {mAP=}, {mAUC=}, {acc=}, {stats[0]['AP']}, {stats[1]['AP']}\n")
+    plot_confusion_matrix_percent(np.argmax(y_true, axis=1), np.argmax(y_pred, axis=1), name="fakeav")
 
 """
 Fine-tuned:
