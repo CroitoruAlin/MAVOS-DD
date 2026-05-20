@@ -113,7 +113,10 @@ class SVDResidualLinear(nn.Module):
 # Function to replace nn.Linear modules within self_attn modules with SVDResidualLinear
 def apply_svd_residual_to_self_attn(model, r):
     for name, module in model.named_children():
-        if 'attn' in name or "mlp" in name:
+        if "a2v" in name or "v2a" in name:
+            continue
+        
+        if ('attn' in name or "mlp" in name):
             # Replace nn.Linear layers in this module
             for sub_name, sub_module in module.named_modules():
                 if isinstance(sub_module, nn.Linear):
