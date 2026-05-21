@@ -1,0 +1,6 @@
+MRDF/fairseq/
+datasets/
+DeepfakeBench/
+MRDF/
+*.pyc
+*__pycache__/

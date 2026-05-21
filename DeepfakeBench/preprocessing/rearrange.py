@@ -511,6 +511,32 @@ def generate_dataset_file(dataset_name, dataset_root_path, output_file_path, com
             frame_paths = [os.path.join(video_path, frame.name) for frame in os.scandir(video_path)]
             # print(label, split, video_name)
             dataset_dict[dataset_name][label][split][video_name] = {"label": label, "frames": frame_paths}
+    elif dataset_name == "PolyGlotFake":
+        dataset_path = dataset_root_path
+        dataset_dict[dataset_name] = {"real": {"train": {}, "test": {}, "val":{}},
+                                      "fake": {"train": {}, "test": {}, "val": {}}}
+        for subdir in ["real", "fake"]:
+            for language in os.listdir(os.path.join(dataset_path, subdir)):
+                print(language)
+                for filename in os.listdir(os.path.join(dataset_path, subdir, language)):
+                    if os.path.isdir(os.path.join(dataset_path, subdir, language, filename)):
+                        video_name = filename
+                        video_path = os.path.join(dataset_path, subdir, language, video_name, "frames", video_name[:-4])
+                        frame_paths = [os.path.join(video_path, frame.name) for frame in os.scandir(video_path)]
+                        # assign all data to train set
+                        dataset_dict[dataset_name][subdir]['test'][video_name] = {"label": subdir, "frames": frame_paths}
+    elif dataset_name == "BioDeepAV":
+        dataset_path = os.path.join(dataset_root_path, dataset_name)
+        dataset_dict[dataset_name] = {"real": {"train": {}, "test": {}, "val":{}},
+                                      "fake": {"train": {}, "test": {}, "val": {}}}
+        for subdir in ["real", "fake"]:
+            for filename in os.listdir(os.path.join(dataset_path, subdir, "videos")):
+                if os.path.isdir(os.path.join(dataset_path, subdir, "videos", filename)):
+                    video_name = filename
+                    video_path = os.path.join(dataset_path, subdir, "videos", video_name, "frames", video_name[:-4])
+                    frame_paths = [os.path.join(video_path, frame.name) for frame in os.scandir(video_path)]
+                    # assign all data to train set
+                    dataset_dict[dataset_name][subdir]['test'][video_name] = {"label": subdir, "frames": frame_paths}
 
     # Convert the dataset dictionary to JSON format and save to file
     os.makedirs(output_file_path, exist_ok=True)

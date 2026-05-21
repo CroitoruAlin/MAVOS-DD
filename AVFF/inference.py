@@ -21,12 +21,12 @@ DATASET_INPUT_PATH = "/home/eivor/data/PolyGlotFake/BioDeepAV"
 # CHECKPOINT_PATH = "/home/eivor/biodeep/Detection/MAVOS-DD/checkpoints/finetuned/avff_mavos.pth"
 CHECKPOINT_PATH = "/home/eivor/biodeep/Detection/MAVOS-DD/checkpoints/pretrained/stage-3.pth"
 
-languages_used = "no_encoders"
+languages_used = "effort_r523_no_cross"
 CHECKPOINT_PATH = f"/home/eivor/biodeep/Detection/MAVOS-DD/AVFF/checkpoints_trained/{languages_used}/models/best_audio_model.pth"
 
 device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
 audio_model = VideoCAVMAEFT()
-# apply_svd_residual_to_self_attn(audio_model, r=523)
+apply_svd_residual_to_self_attn(audio_model, r=523)
 
 # audio_model = torch.nn.DataParallel(audio_model)
 ckpt = torch.load(CHECKPOINT_PATH, map_location='cpu')
@@ -58,22 +58,22 @@ if __name__ == "__main__":
     # metadata_open_model = concatenate_datasets([metadata_indomain, metadata_open_language])
     # metadata_all = metadata.filter(lambda sample: sample['split']=='test')
 
-    # mavos_dd = datasets.Dataset.load_from_disk("/home/eivor/data/MAVOS-DD")
-    # val_loader = torch.utils.data.DataLoader(
-    #     MavosDD(
-    #         # datasets.concatenate_datasets([
-    #         #     mavos_dd.filter(lambda sample: sample['split']=='test' and not sample['open_set_model'] and not sample['open_set_language']),
-    #         #     mavos_dd.filter(lambda sample: sample['split']=='test' and not sample['open_set_model'] and sample['open_set_language'])
-    #         # ]),
-    #         mavos_dd.filter(lambda sample: sample['split']=='test'),
-    #         "/home/eivor/data/MAVOS-DD", val_audio_conf, stage=2
-    #     ),
-    #     batch_size=4, shuffle=False, num_workers=24, pin_memory=False
-    # )
+    mavos_dd = datasets.Dataset.load_from_disk("/home/eivor/data/MAVOS-DD")
+    val_loader = torch.utils.data.DataLoader(
+        MavosDD(
+            # datasets.concatenate_datasets([
+            #     mavos_dd.filter(lambda sample: sample['split']=='test' and not sample['open_set_model'] and not sample['open_set_language']),
+            #     mavos_dd.filter(lambda sample: sample['split']=='test' and not sample['open_set_model'] and sample['open_set_language'])
+            # ]),
+            mavos_dd.filter(lambda sample: sample['split']=='test'),
+            "/home/eivor/data/MAVOS-DD", val_audio_conf, stage=2
+        ),
+        batch_size=4, shuffle=False, num_workers=24, pin_memory=False
+    )
     
     # FakeAVCEleb
-    fakeavceleb_ds = FakeAVCeleb("/home/eivor/data/FakeAVCeleb_v1.2", val_audio_conf, stage=2)
-    val_loader = torch.utils.data.DataLoader(fakeavceleb_ds, batch_size=4, shuffle=False, num_workers=12, pin_memory=False)
+    # fakeavceleb_ds = FakeAVCeleb("/home/eivor/data/FakeAVCeleb_v1.2", val_audio_conf, stage=2)
+    # val_loader = torch.utils.data.DataLoader(fakeavceleb_ds, batch_size=4, shuffle=False, num_workers=12, pin_memory=False)
     
     # biodeepav_ds = []
     # for label in ["real", "fake"]:
@@ -107,5 +107,5 @@ if __name__ == "__main__":
                     "true": y_true.tolist(),
                 }
                 
-    with  open(f'predictions_no_encoders_fakeavceleb.json', 'w') as f:
+    with  open(f'predictions_effort_r523_no_cross.json', 'w') as f:
       json.dump(data_out, f, indent=4)

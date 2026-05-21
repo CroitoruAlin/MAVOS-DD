@@ -76,41 +76,63 @@ import torch.nn.functional as F
 class VideoDataset(data.Dataset):
     def __init__(self, metadata, root, num_frames):
         self.metadata = metadata
-        self.root = root
         self.num_frames = num_frames
         remaining_videos = 0
+        
         self.indices = []
-        for i, sample in enumerate(tqdm(metadata)):
-
-            output_path = os.path.join("/home/elrond/projects/DeepfakeBench/datasets/MAVOS-DD", "/".join(sample['video_path'].split("/")[:-1]), "frames", sample['video_path'].split("/")[-1][:-4])
-            if os.path.exists(output_path) and len(os.listdir(output_path))>5:
-                continue
-            try:
-                VideoReader(os.path.join(self.root, sample['video_path']), ctx=cpu(0))
-            except:
-                continue
-            remaining_videos+=1
-            self.indices.append(i)
+        for subdir in metadata:
+            for filename in os.listdir(subdir[0]):
+                output_path = os.path.join(subdir[0], filename[:-4], "frames")
+                
+                if os.path.exists(output_path) and len(os.listdir(output_path))>5:
+                    continue
+                
+                try:
+                    VideoReader(os.path.join(subdir[0], filename), ctx=cpu(0))
+                except:
+                    continue
+            
+                remaining_videos+=1
+                
+                self.indices.append((subdir[0], filename[:-4]))
         print("Remaining videos", remaining_videos)
 
     def __len__(self):
         return len(self.indices)
     
     def __getitem__(self, index):
-        sample = self.metadata[self.indices[index]]
-        vr = VideoReader(os.path.join(self.root, sample['video_path']), ctx=cpu(0))
-        length_video = len(vr)
-        indices = np.linspace(0, length_video - 1, self.num_frames, endpoint=True, dtype=int)
-        frames = vr.get_batch(indices).asnumpy()
-        height, width = frames.shape[1], frames.shape[2]
-        aspect_ratio = width/height
-        height= 512
-        width = height*aspect_ratio
-        frames  = torch.from_numpy(frames).permute(0,3,1,2).float()
-        frames = F.interpolate(frames, size=(int(height), int(width)), mode='bilinear', align_corners=False)
-        
-        frames = frames.permute(0, 2, 3, 1)
-        return frames, os.path.join("/home/elrond/projects/DeepfakeBench/datasets/MAVOS-DD", "/".join(sample['video_path'].split("/")[:-1])), sample['video_path'].split("/")[-1][:-4]
+        try:
+            subdir, filename = self.indices[index]
+            vr = VideoReader(os.path.join(subdir, f"{filename}.mp4"), ctx=cpu(0))
+            
+            length_video = len(vr)
+            indices = np.linspace(0, length_video - 1, self.num_frames, endpoint=True, dtype=int)
+            frames = vr.get_batch(indices).asnumpy()
+            height, width = frames.shape[1], frames.shape[2]
+            aspect_ratio = width/height
+            height= 512
+            width = height*aspect_ratio
+            frames  = torch.from_numpy(frames).permute(0,3,1,2).float()
+            frames = F.interpolate(frames, size=(int(height), int(width)), mode='bilinear', align_corners=False)
+            
+            frames = frames.permute(0, 2, 3, 1)
+            return frames, os.path.join(subdir, filename), filename[:-4]
+        except Exception as e:
+            subdir, filename = self.indices[index+1]
+            vr = VideoReader(os.path.join(subdir, f"{filename}.mp4"), ctx=cpu(0))
+            
+            length_video = len(vr)
+            indices = np.linspace(0, length_video - 1, self.num_frames, endpoint=True, dtype=int)
+            frames = vr.get_batch(indices).asnumpy()
+            height, width = frames.shape[1], frames.shape[2]
+            aspect_ratio = width/height
+            height= 512
+            width = height*aspect_ratio
+            frames  = torch.from_numpy(frames).permute(0,3,1,2).float()
+            frames = F.interpolate(frames, size=(int(height), int(width)), mode='bilinear', align_corners=False)
+            
+            frames = frames.permute(0, 2, 3, 1)
+            return frames, os.path.join(subdir, filename), filename[:-4]
     
 
 def create_logger(log_path):
@@ -398,7 +420,7 @@ def video_manipulate(
 
     # Iterate through the videos in the dataset and extract faces
     try:
-        facecrop(movie_path, mask_path, Path(f"/home/elrond/projects/DeepfakeBench/datasets/MAVOS-DD/{sub_dataset_name}"), mode, num_frames, stride, face_predictor, face_detector)
+        facecrop(movie_path, mask_path, Path(f"/home/MAVOS-DD/{sub_dataset_name}"), mode, num_frames, stride, face_predictor, face_detector)
     except Exception as e:
         logger.error(f"Error processing video {movie_path}: {e}")
 import einops
@@ -466,7 +488,6 @@ def preprocess(dataloader, face_detector=None):
             img = cv2.resize(img, (outsize[1], outsize[0]))
         return img
     for video, path, video_name in tqdm(dataloader):
-        print(video.shape)
         boxes, probs, landmarks = face_detector.detect(video.squeeze(), landmarks=True)
         if not face_detector.keep_all:
             boxes, probs, landmarks = face_detector.select_boxes(
@@ -522,6 +543,7 @@ if __name__ == '__main__':
     
     # use dataset_name and dataset_root_path to get dataset_path
     dataset_path = Path(os.path.join(dataset_root_path, dataset_name))
+    # dataset_path = Path(dataset_root_path)
 
     # Create logger
     log_path = f'./logs/{dataset_name}.log'
@@ -588,10 +610,21 @@ if __name__ == '__main__':
         #         sub_dataset_paths[key] = [Path(os.path.join(dataset_path, sample['video_path']))]
         #     else:
         #         sub_dataset_paths[key].append(Path(os.path.join(dataset_path, sample['video_path'])))
+    elif dataset_name == "PolyGlotFake":
+        sub_dataset_names = ['fake', 'real']
+        sub_dataset_paths = []
+        for sub_dataset_name in sub_dataset_names:
+            for language in os.listdir(os.path.join(dataset_path, sub_dataset_name)):
+                sub_dataset_paths.append((Path(os.path.join(dataset_path, sub_dataset_name, language)), f"{sub_dataset_name}_{language}"))
+    elif dataset_name == "BioDeepAV":
+        sub_dataset_names = ['fake', 'real']
+        sub_dataset_paths = []
+        for sub_dataset_name in sub_dataset_names:
+            sub_dataset_paths.append((Path(os.path.join(dataset_path, sub_dataset_name, "videos")), f"{sub_dataset_name}"))
     else:
         raise ValueError(f"Dataset {dataset_name} not recognized")
     
-    video_dataset = VideoDataset(filtered_dataset, "/mnt/d/projects/datasets/MAVOS-DD", num_frames)
+    video_dataset = VideoDataset(sub_dataset_paths, "/mnt/d/projects/datasets/MAVOS-DD", num_frames)
     from facenet_pytorch.models.mtcnn import MTCNN
     face_detector = MTCNN(margin=30, select_largest=True, post_process=False, device='cuda:0')
     dataloader = data.DataLoader(video_dataset, num_workers=16, batch_size=1)

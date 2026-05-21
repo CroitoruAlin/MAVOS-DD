@@ -8,8 +8,9 @@ from models.video_cav_mae import VideoCAVMAEFT
 from traintest_ft import train
 import warnings
 
-from mavosdd_dataset import MavosDD
 from exddv_dataset import ExDDV
+from mavosdd_dataset import MavosDD
+from models.effort_detector import apply_svd_residual_to_self_attn
 
 
 parser = argparse.ArgumentParser(description='Video CAV-MAE')
@@ -29,6 +30,7 @@ parser.add_argument('--n-epochs', default=10, type=int, help='number of epochs')
 parser.add_argument('--n_classes', default=2, type=int, help='Num of classes to be classified')
 parser.add_argument('--save-dir', default='checkpoints', type=str, help='directory to save checkpoints')
 parser.add_argument('--pretrain_path', default=None, type=str, help='path to pretrain model')
+parser.add_argument('--use_effort', default="false", type=str, help='if use effort detector', choices=["true", "false", "True", "False"])
 parser.add_argument("--contrast_loss_weight", type=float, default=0.01, help="weight for contrastive loss")
 parser.add_argument("--mae_loss_weight", type=float, default=3.0, help="weight for mae loss")
 parser.add_argument('--save_model', default=True)
@@ -61,12 +63,21 @@ print('current mae loss {:.3f}, and contrastive loss {:.3f}'.format(args.mae_los
 input_path = args.input_path
 mavos_dd = datasets.Dataset.load_from_disk(input_path)
 
+train_dataset = MavosDD(
+    mavos_dd.filter(lambda sample: sample['split']=="train"),
+    input_path, audio_conf, stage=2
+)
+val_dataset = MavosDD(
+    mavos_dd.filter(lambda sample: sample['split']=="validation"),
+    input_path, audio_conf, stage=2
+)
+
 train_loader = DataLoader(
-    MavosDD(mavos_dd.filter(lambda sample: sample['split']=="train"), input_path, audio_conf, stage=2),
+    train_dataset,
     batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers, pin_memory=True, drop_last=True
 )
 val_loader = DataLoader(
-    MavosDD(mavos_dd.filter(lambda sample: sample['split']=="validation"), input_path, audio_conf, stage=2),
+    val_dataset,
     batch_size=args.batch_size, shuffle=False, num_workers=args.num_workers, pin_memory=True, drop_last=True
 )
 
@@ -80,13 +91,25 @@ if args.pretrain_path is not None:
     mdl_weight = torch.load(args.pretrain_path, map_location='cpu')
     # if not isinstance(cavmae_ft, torch.nn.DataParallel):
     #     cavmae_ft = torch.nn.DataParallel(cavmae_ft)
-    miss, unexpected = cavmae_ft.load_state_dict(mdl_weight, strict=False)
+    new_mdl_weight = {}
+    for k, v in mdl_weight.items():
+        new_key = k.replace("module.", "")
+        new_mdl_weight[new_key] = v
+    miss, unexpected = cavmae_ft.load_state_dict(new_mdl_weight, strict=False)
     print("Missing: ", miss)
     print("Unexpected: ", unexpected)
     print('now load pretrain model from {:s}, missing keys: {:d}, unexpected keys: {:d}'.format(args.pretrain_path, len(miss), len(unexpected)))
 else:
     warnings.warn("Note you are finetuning a model without any finetuning.")
-    
+        
+if args.use_effort.lower() == "true":
+    apply_svd_residual_to_self_attn(cavmae_ft, r=523)
+
+# Daca nu merge asta, pune LR mic pe ele #TODO
+for param_name, param in cavmae_ft.named_parameters():
+    if "mlp_audio" in param_name:
+        param.requires_grad = True
+
 print("\n Creating experiment directory: %s"%args.save_dir)
 if not os.path.exists(args.save_dir):
     os.makedirs(args.save_dir)

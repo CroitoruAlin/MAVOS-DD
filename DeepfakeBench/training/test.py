@@ -191,7 +191,7 @@ def main():
         print('===> Load checkpoint done!')
     else:
         print('Fail to load the pre-trained weights')
-    
+
     # start testing
     best_metric = test_epoch(model, test_data_loaders, args)
     print('===> Test Done!')

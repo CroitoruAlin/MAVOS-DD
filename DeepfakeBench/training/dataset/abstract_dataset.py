@@ -5,7 +5,7 @@
 
 import sys
 
-import lmdb
+# import lmdb
 
 sys.path.append('.')
 
@@ -208,11 +208,18 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
                     raise ValueError(f'Label {video_info["label"]} is not found in the configuration file.')
                 label = self.config['label_dict'][video_info['label']]
                 frame_paths = video_info['frames']
+                if not isinstance(frame_paths, list):
+                    frame_paths = [frame_paths]
+                if frame_paths == []:
+                    continue
+                
                 # sorted video path to the lists
                 if '\\' in frame_paths[0]:
                     frame_paths = sorted(frame_paths, key=lambda x: int(x.split('\\')[-1].split('.')[0]))
                 else:
                     frame_paths = sorted(frame_paths, key=lambda x: int(x.split('/')[-1].split('.')[0]))
+                    
+                frame_paths = [frame_path.replace("/app/data", "/home/eivor/data/PolyGlotFake") for frame_path in frame_paths] # TODO
 
                 # Consider the case when the actual number of frames (e.g., 270) is larger than the specified (i.e., self.frame_num=32)
                 # In this case, we select self.frame_num frames from the original 270 frames
@@ -576,7 +583,7 @@ class DeepfakeAbstractBaseDataset(data.Dataset):
             images, labels, landmarks, masks, names = zip(*batch)
         else:
             images, labels, landmarks, masks = zip(*batch)
-        print(name_present)
+        # print(name_present)
         # Stack the image, label, landmark, and mask tensors
         # print(names)
         images = torch.stack(images, dim=0)
